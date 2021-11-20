@@ -13,8 +13,7 @@
         "useDefineForClassFields": false,
         "typeRoots": [
             "./node_modules/@types"
-        ],
-        "rootDir": "src"
+        ]
     },
     "include": [
         "src",

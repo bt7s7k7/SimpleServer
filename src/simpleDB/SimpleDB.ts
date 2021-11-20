@@ -1,10 +1,10 @@
 import { Struct } from "../struct/Struct"
 import { Type } from "../struct/Type"
 
-type FilterProps<T> = Pick<T, keyof T>
+type EntityType<T extends SimpleDBOptions, K extends keyof T["tables"]> = InstanceType<T["tables"][K]>
 
 interface SimpleDBOptions {
-    tables: Record<string, FilterProps<Struct.TypedStruct<Type.ObjectType<{ id: Type<string> }>>> & { new(source: any): any }>
+    tables: Record<string, Struct.StructConcept<{ id: Type<string> }>>
 }
 
 interface SimpleDBData {
@@ -13,13 +13,15 @@ interface SimpleDBData {
 
 export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
     protected readonly tables = new Map<keyof T["tables"], Map<string, Struct.StructBase>>()
+    public dirty = false
 
-    public put<K extends keyof T["tables"]>(table: K, data: InstanceType<T["tables"][K]>) {
+    public put<K extends keyof T["tables"]>(table: K, data: EntityType<T, K>) {
         this.tables.get(table)!.set(data.id, data)
+        this.dirty = true
     }
 
-    public tryGet<K extends keyof T["tables"]>(table: K, id: string) {
-        return this.tables.get(table)!.get(id) ?? null as InstanceType<T["tables"][K]> | null
+    public tryGet<K extends keyof T["tables"]>(table: K, id: string): EntityType<T, K> | null {
+        return (this.tables.get(table)!.get(id) ?? null) as EntityType<T, K> | null
     }
 
     public get<K extends keyof T["tables"]>(table: K, id: string) {
@@ -28,8 +30,8 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
         return ret
     }
 
-    public list<K extends keyof T["tables"]>(table: K) {
-        return this.tables.get(table)!.values() as IterableIterator<InstanceType<T["tables"][K]>>
+    public list<K extends keyof T["tables"]>(table: K): IterableIterator<EntityType<T, K>> {
+        return this.tables.get(table)!.values() as IterableIterator<EntityType<T, K>>
     }
 
     public export() {

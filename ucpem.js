@@ -8,7 +8,8 @@ project.prefix("src").res("simpleDB",
 
 project.prefix("src").res("simpleAuth",
     project.ref("simpleDB"),
-    github("bt7s7k7/Struct").res("structSync")
+    github("bt7s7k7/Struct").res("structSync"),
+    github("bt7s7k7/CommonTypes").res("comTypes"),
 )
 
 project.prefix("test").use(github("bt7s7k7/TestUtil").res("testUtil"))

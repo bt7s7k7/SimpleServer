@@ -1,5 +1,3 @@
-import { randomBytes } from "crypto"
-import * as jsonwebtoken from "jsonwebtoken"
 import { asError, delayedPromise } from "../comTypes/util"
 import { DIService } from "../dependencyInjection/DIService"
 import { EventEmitter } from "../eventLib/EventEmitter"
@@ -10,7 +8,6 @@ import { StructSyncClient } from "../structSync/StructSyncClient"
 import { StructSyncContract } from "../structSync/StructSyncContract"
 import { StructSyncMessages } from "../structSync/StructSyncMessages"
 import { StructSyncServer } from "../structSync/StructSyncServer"
-import bcryptjs = require("bcryptjs")
 
 interface LoginResult<T> {
     user: T
@@ -40,6 +37,12 @@ class UserInvalidError extends Error {
 
 export namespace Auth {
     export function makeAuthController<T>(userType: Type<T>) {
+        // @ts-ignore
+        const bcryptjs = require("bcryptjs")
+        // @ts-ignore
+        const { randomBytes } = require("crypto")
+        // @ts-ignore
+        const jsonwebtoken = require("jsonwebtoken")
         const contract = makeAuthContract(userType)
         const userMeta = new WeakMap<StructSyncMessages.MetaHandle, T>()
 
@@ -53,14 +56,14 @@ export namespace Auth {
                     iss: "auth"
                 }, this.key, {
                     expiresIn: "1d"
-                }, (err, token) => err ? reject(err) : resolve(token!)))
+                }, (err: any, token: string) => err ? reject(err) : resolve(token!)))
 
                 const refreshToken = await new Promise<string>((resolve, reject) => jsonwebtoken.sign({
                     sub: username,
                     iss: "auth"
                 }, this.refreshKey, {
                     expiresIn: "14d"
-                }, (err, token) => err ? reject(err) : resolve(token!)))
+                }, (err: any, token: string) => err ? reject(err) : resolve(token!)))
 
                 return { token, refreshToken }
             }
@@ -70,9 +73,9 @@ export namespace Auth {
             }
 
             public async verifyToken(token: string, type: "key" | "refreshKey") {
-                const payload = await new Promise<jsonwebtoken.JwtPayload>((resolve, reject) => jsonwebtoken.verify(
+                const payload = await new Promise<any>((resolve, reject) => jsonwebtoken.verify(
                     token, this[type], {},
-                    (err, payload) => err ? reject(err) : resolve(payload!))).catch(() => null)
+                    (err: any, payload: any) => err ? reject(err) : resolve(payload!))).catch(() => null)
 
                 if (!payload) return null
                 if (payload.iss != "auth") return null
@@ -162,7 +165,7 @@ export namespace Auth {
         }
     }
 
-    export function makeAuthBrige<T>(userType: Type<T>) {
+    export function makeAuthBridge<T>(userType: Type<T>) {
         const contract = makeAuthContract(userType)
 
 
@@ -232,7 +235,7 @@ export namespace Auth {
             }
 
             public async register(username: string, password: string) {
-                const { user, refreshToken, token } = await this.proxy.login({ username, password }) as unknown as LoginResult<T>
+                const { user, refreshToken, token } = await this.proxy.register({ username, password }) as unknown as LoginResult<T>
 
                 this.user = user
                 this.token = token

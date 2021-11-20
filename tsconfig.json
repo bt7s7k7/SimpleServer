@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "incremental": true,
+        "target": "es6",
+        "sourceMap": true,
+        "strict": true,
+        "lib": [
+            "ES2020"
+        ],
+        "module": "CommonJS",
+        "outDir": "build",
+        "preserveSymlinks": true,
+        "useDefineForClassFields": false,
+        "typeRoots": [
+            "./node_modules/@types"
+        ],
+        "rootDir": "src"
+    },
+    "include": [
+        "src",
+        "test"
+    ]
+}

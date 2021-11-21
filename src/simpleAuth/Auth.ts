@@ -206,8 +206,10 @@ export namespace Auth {
                     if (this.refreshToken) {
                         const tokens = await this.proxy.refreshToken({ refreshToken: this.refreshToken }).catch(asError)
                         if (tokens instanceof Error) {
-                            // eslint-disable-next-line no-console
-                            console.error(tokens)
+                            if ((tokens as any).response?.data != "Invalid token") {
+                                // eslint-disable-next-line no-console
+                                console.error(tokens)
+                            }
                             return
                         }
                         this.token = tokens.token

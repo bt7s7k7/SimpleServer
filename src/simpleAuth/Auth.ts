@@ -50,6 +50,10 @@ export namespace Auth {
             protected key = randomBytes(64)
             protected refreshKey = randomBytes(64)
 
+            public async findUser(username: string) {
+                return this.userMethods.findUser(username)?.user
+            }
+
             public async makeTokens(username: string) {
                 const token = await new Promise<string>((resolve, reject) => jsonwebtoken.sign({
                     sub: username,

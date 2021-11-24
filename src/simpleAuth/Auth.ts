@@ -163,7 +163,7 @@ export namespace Auth {
 
             public static getUser(meta: StructSyncMessages.MetaHandle) {
                 const user = AuthController.tryGetUser(meta)
-                if (!user) throw new UserInvalidError("Authentification required")
+                if (!user) throw new UserInvalidError("Authentication required")
                 return user
             }
         }

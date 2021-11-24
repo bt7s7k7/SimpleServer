@@ -1,4 +1,4 @@
-import { asError, delayedPromise } from "../comTypes/util"
+import { asError, delayedPromise, unreachable } from "../comTypes/util"
 import { DIService } from "../dependencyInjection/DIService"
 import { EventEmitter } from "../eventLib/EventEmitter"
 import { Struct } from "../struct/Struct"
@@ -204,7 +204,8 @@ export namespace Auth {
                     if (user) {
                         this.user = user
                         this.onUserChange.emit(this)
-                        return
+
+                        return true
                     }
 
                     if (this.refreshToken) {
@@ -214,7 +215,14 @@ export namespace Auth {
                                 // eslint-disable-next-line no-console
                                 console.error(tokens)
                             }
-                            return
+
+                            this.token = null
+                            this.refreshToken = null
+                            this.user = null
+                            this.onTokenChange.emit(this)
+                            this.onUserChange.emit(this)
+
+                            return false
                         }
                         this.token = tokens.token
                         this.refreshToken = tokens.refreshToken
@@ -224,7 +232,19 @@ export namespace Auth {
                         if (user) {
                             this.user = user
                             this.onUserChange.emit(this)
+
+                            return true
                         }
+
+                        throw unreachable()
+                    } else {
+                        this.token = null
+                        this.refreshToken = null
+                        this.user = null
+                        this.onTokenChange.emit(this)
+                        this.onUserChange.emit(this)
+
+                        return false
                     }
                 }
             }

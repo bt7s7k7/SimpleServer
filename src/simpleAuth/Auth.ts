@@ -76,7 +76,7 @@ export namespace Auth {
                 return bcryptjs.hashSync(password, salt)
             }
 
-            public async verifyToken(token: string, type: "key" | "refreshKey") {
+            public async verifyToken(token: string, type: "key" | "refreshKey"): Promise<string | null> {
                 const payload = await new Promise<any>((resolve, reject) => jsonwebtoken.verify(
                     token, this[type], {},
                     (err: any, payload: any) => err ? reject(err) : resolve(payload!))).catch(() => null)

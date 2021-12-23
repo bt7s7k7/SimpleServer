@@ -4,7 +4,7 @@ import { Type } from "../struct/Type"
 type EntityType<T extends SimpleDBOptions, K extends keyof T["tables"]> = InstanceType<T["tables"][K]>
 
 interface SimpleDBOptions {
-    tables: Record<string, Struct.StructConcept<{ id: Type<string> }>>
+    tables: Record<string, Struct.StructConcept<Record<string, Type<any>>>>
 }
 
 interface SimpleDBData {
@@ -16,15 +16,15 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
     public dirty = false
 
     public put<K extends keyof T["tables"]>(table: K, data: EntityType<T, K>) {
-        this.tables.get(table)!.set(data.id, data)
+        this.tables.get(table)!.set(data.id ?? "sigleton", data)
         this.dirty = true
     }
 
-    public tryGet<K extends keyof T["tables"]>(table: K, id: string): EntityType<T, K> | null {
-        return (this.tables.get(table)!.get(id) ?? null) as EntityType<T, K> | null
+    public tryGet<K extends keyof T["tables"]>(table: K, id?: string): EntityType<T, K> | null {
+        return (this.tables.get(table)!.get(id ?? "sigleton") ?? null) as EntityType<T, K> | null
     }
 
-    public get<K extends keyof T["tables"]>(table: K, id: string) {
+    public get<K extends keyof T["tables"]>(table: K, id?: string) {
         const ret = this.tryGet(table, id)
         if (!ret) throw new RangeError(`Cannot get entity with id "${id}"`)
         return ret

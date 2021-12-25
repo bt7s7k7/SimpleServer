@@ -61,6 +61,11 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
         }
     }
 
+    public entityChanged() {
+        this.dirty = true
+        this.options.onChanged?.()
+    }
+
     constructor(
         protected readonly options: T
     ) {

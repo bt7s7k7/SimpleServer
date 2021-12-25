@@ -5,6 +5,7 @@ type EntityType<T extends SimpleDBOptions, K extends keyof T["tables"]> = Instan
 
 interface SimpleDBOptions {
     tables: Record<string, Struct.StructConcept<Record<string, Type<any>>>>
+    onChanged?: () => void
 }
 
 interface SimpleDBData {
@@ -18,6 +19,7 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
     public put<K extends keyof T["tables"]>(table: K, data: EntityType<T, K>) {
         this.tables.get(table)!.set(data.id ?? "sigleton", data)
         this.dirty = true
+        this.options.onChanged?.()
     }
 
     public tryGet<K extends keyof T["tables"]>(table: K, id?: string): EntityType<T, K> | null {

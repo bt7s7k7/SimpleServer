@@ -7,7 +7,7 @@ import { ActionType } from "../structSync/ActionType"
 import { StructSyncClient } from "../structSync/StructSyncClient"
 import { StructSyncContract } from "../structSync/StructSyncContract"
 import { StructSyncMessages } from "../structSync/StructSyncMessages"
-import { StructSyncServer } from "../structSync/StructSyncServer"
+import { ClientError, StructSyncServer } from "../structSync/StructSyncServer"
 
 interface LoginResult<T> {
     user: T
@@ -47,11 +47,11 @@ export namespace Auth {
         const userMeta = new WeakMap<StructSyncMessages.MetaHandle, T>()
 
         return class AuthController extends contract.defineController() {
-            protected key = randomBytes(64)
-            protected refreshKey = randomBytes(64)
+            public key = randomBytes(64)
+            public refreshKey = randomBytes(64)
 
             public async findUser(username: string) {
-                return this.userMethods.findUser(username)?.user
+                return this.config.findUser(username)?.user
             }
 
             public async makeTokens(username: string) {
@@ -91,38 +91,39 @@ export namespace Auth {
                 login: async ({ username, password }) => {
                     await delayedPromise(Math.floor(Math.random() * 10))
 
-                    const entity = this.userMethods.findUser(username)
+                    const entity = this.config.findUser(username)
                     if (!entity) throw new UserInvalidError("User not found")
 
                     const passwordHash = this.hashPassword(password, entity.salt)
-                    if (!this.userMethods.testUser(entity.user, passwordHash)) throw new UserInvalidError("User not found")
+                    if (!this.config.testUser(entity.user, passwordHash)) throw new UserInvalidError("User not found")
 
                     const keys = await this.makeTokens(username)
 
-                    return { user: this.userMethods.sterilizeUser(entity.user), ...keys }
+                    return { user: this.config.sterilizeUser(entity.user), ...keys }
                 },
                 register: async ({ username, password }) => {
-                    const alreadyUser = this.userMethods.findUser(username)
+                    if (this.config.disableRegistration) throw new ClientError("Registration is disabled")
+                    const alreadyUser = this.config.findUser(username)
                     if (alreadyUser) throw new UserInvalidError("Username taken")
 
                     const salt = bcryptjs.genSaltSync()
                     const passwordHash = this.hashPassword(password, salt)
-                    const user = this.userMethods.registerUser(username, passwordHash, salt)
+                    const user = this.config.registerUser(username, passwordHash, salt)
 
                     const keys = await this.makeTokens(username)
 
-                    return { user: this.userMethods.sterilizeUser(user), ...keys }
+                    return { user: this.config.sterilizeUser(user), ...keys }
                 },
                 refreshToken: async ({ refreshToken }) => {
                     const username = await this.verifyToken(refreshToken, "refreshKey")
-                    if (!username || !this.userMethods.findUser(username)) throw new UserInvalidError("Invalid token")
+                    if (!username || !this.config.findUser(username)) throw new UserInvalidError("Invalid token")
 
                     const keys = await this.makeTokens(username)
                     return keys
                 },
                 getUser: async (_, meta) => {
                     const user = AuthController.tryGetUser(meta)
-                    if (user) return this.userMethods.sterilizeUser(user)
+                    if (user) return this.config.sterilizeUser(user)
                     return null
                 }
             })
@@ -137,7 +138,7 @@ export namespace Auth {
                             if (token) {
                                 const username = await this.controller.verifyToken(token, "key")
                                 if (username) {
-                                    const user = this.controller.userMethods.findUser(username)?.user
+                                    const user = this.controller.config.findUser(username)?.user
                                     if (user) userMeta.set(meta, user)
                                 }
                             }
@@ -147,11 +148,12 @@ export namespace Auth {
             }(this)
 
             constructor(
-                protected readonly userMethods: {
+                protected readonly config: {
                     findUser: (username: string) => { user: T, salt: string } | null,
                     testUser: (user: T, passwordHash: string) => boolean,
                     registerUser: (username: string, passwordHash: string, salt: string) => T,
-                    sterilizeUser: (user: T) => T
+                    sterilizeUser: (user: T) => T,
+                    disableRegistration?: boolean
                 }
             ) {
                 super()

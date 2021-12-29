@@ -22,6 +22,17 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
         this.options.onChanged?.()
     }
 
+    public delete<K extends keyof T["tables"]>(table: K, id?: string) {
+        const deleted = this.tables.get(table)!.delete(id ?? "sigleton")
+
+        if (deleted) {
+            this.dirty = true
+            this.options.onChanged?.()
+        }
+
+        return deleted
+    }
+
     public tryGet<K extends keyof T["tables"]>(table: K, id?: string): EntityType<T, K> | null {
         return (this.tables.get(table)!.get(id ?? "sigleton") ?? null) as EntityType<T, K> | null
     }

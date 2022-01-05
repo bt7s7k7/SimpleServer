@@ -45,6 +45,10 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
         return this.tables.get(table)!.values() as IterableIterator<EntityType<T, K>>
     }
 
+    public getAll<K extends keyof T["tables"]>(table: K) {
+        return this.tables.get(table)! as unknown as ReadonlyMap<string, EntityType<T, K>>
+    }
+
     public export() {
         const result: SimpleDBData = {
             tables: {}

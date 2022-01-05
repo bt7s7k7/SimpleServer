@@ -8,6 +8,7 @@ import { StructSyncClient } from "../structSync/StructSyncClient"
 import { StructSyncContract } from "../structSync/StructSyncContract"
 import { StructSyncMessages } from "../structSync/StructSyncMessages"
 import { ClientError, StructSyncServer } from "../structSync/StructSyncServer"
+import { Permission, PermissionRepository } from "./PermissionRepository"
 
 interface LoginResult<T> {
     user: T
@@ -27,7 +28,12 @@ function makeAuthContract<T>(userType: Type<T>) {
         login: ActionType.define("login", Type.object({ username: Type.string, password: Type.string }), LoginResult_t),
         register: ActionType.define("register", Type.object({ username: Type.string, password: Type.string }), LoginResult_t),
         refreshToken: ActionType.define("refreshToken", Type.object({ refreshToken: Type.string }), Type.object({ token: Type.string, refreshToken: Type.string })),
-        getUser: ActionType.define("getUser", Type.empty, userType.as(Type.nullable))
+        getUser: ActionType.define("getUser", Type.empty, userType.as(Type.nullable)),
+        changeOwnPassword: ActionType.define("changeOwnPassword", Type.object({ password: Type.string }), Type.empty),
+        changePassword: ActionType.define("changePassword", Type.object({ username: Type.string, password: Type.string }), Type.empty),
+        listUsers: ActionType.define("listUsers", Type.empty, userType.as(Type.array)),
+        deleteOwnAccount: ActionType.define("deleteOwnAccount", Type.empty, Type.empty),
+        deleteAccount: ActionType.define("deleteAccount", Type.object({ username: Type.string }), Type.empty)
     }, {})
 }
 
@@ -87,6 +93,15 @@ export namespace Auth {
                 return payload.sub!
             }
 
+            public createAccount(username: string, password: string) {
+                const duplicateUser = this.config.findUser(username)
+                if (duplicateUser) throw new UserInvalidError("Username taken")
+
+                const salt = bcryptjs.genSaltSync()
+                const passwordHash = this.hashPassword(password, salt)
+                return this.config.registerUser(username, passwordHash, salt)
+            }
+
             public impl = super.impl({
                 login: async ({ username, password }) => {
                     await delayedPromise(Math.floor(Math.random() * 10))
@@ -99,20 +114,15 @@ export namespace Auth {
 
                     const keys = await this.makeTokens(username)
 
-                    return { user: this.config.sterilizeUser(entity.user), ...keys }
+                    return { user: this.config.sanitizeUser(entity.user), ...keys }
                 },
-                register: async ({ username, password }) => {
+                register: async ({ username, password }, meta) => {
                     if (this.config.disableRegistration) throw new ClientError("Registration is disabled")
-                    const alreadyUser = this.config.findUser(username)
-                    if (alreadyUser) throw new UserInvalidError("Username taken")
+                    this.config.permissions?.assertPermission(AuthController.PERMISSIONS.REGISTER, meta)
 
-                    const salt = bcryptjs.genSaltSync()
-                    const passwordHash = this.hashPassword(password, salt)
-                    const user = this.config.registerUser(username, passwordHash, salt)
-
+                    const user = this.createAccount(username, password)
                     const keys = await this.makeTokens(username)
-
-                    return { user: this.config.sterilizeUser(user), ...keys }
+                    return { user: this.config.sanitizeUser(user), ...keys }
                 },
                 refreshToken: async ({ refreshToken }) => {
                     const username = await this.verifyToken(refreshToken, "refreshKey")
@@ -123,8 +133,38 @@ export namespace Auth {
                 },
                 getUser: async (_, meta) => {
                     const user = AuthController.tryGetUser(meta)
-                    if (user) return this.config.sterilizeUser(user)
+                    if (user) return this.config.sanitizeUser(user)
                     return null
+                },
+                changeOwnPassword: async ({ password }, meta) => {
+                    this.config.permissions?.assertPermission(AuthController.PERMISSIONS.CHANGE_OWN_PASSWORD, meta)
+                    const user = AuthController.getUser(meta)
+                    this.config.changeUserPassword(user, (salt) => this.hashPassword(password, salt))
+                },
+                changePassword: async ({ username, password }, meta) => {
+                    if (this.config.permissions) this.config.permissions.assertPermission(AuthController.PERMISSIONS.CHANGE_PASSWORD, meta)
+                    else throw new ClientError("Changing passwords is disabled")
+                    const result = this.config.findUser(username)
+                    if (!result) throw new ClientError("User not found")
+                    this.config.changeUserPassword(result.user, (salt) => this.hashPassword(password, salt))
+                },
+                deleteOwnAccount: async (_, meta) => {
+                    this.config.permissions?.assertPermission(AuthController.PERMISSIONS.DELETE_OWN_ACCOUNT, meta)
+                    const user = AuthController.getUser(meta)
+                    this.config.deleteUser(user)
+                },
+                deleteAccount: async ({ username }, meta) => {
+                    if (this.config.permissions) this.config.permissions.assertPermission(AuthController.PERMISSIONS.DELETE_ACCOUNT, meta)
+                    else throw new ClientError("Deleting users is disabled")
+                    const result = this.config.findUser(username)
+                    if (!result) throw new ClientError("User not found")
+                    this.config.deleteUser(result.user)
+                },
+                listUsers: async (_, meta) => {
+                    if (this.config.permissions) this.config.permissions.assertPermission(AuthController.PERMISSIONS.LIST_USERS, meta)
+                    else throw new ClientError("Listing users is disabled")
+
+                    return this.config.listUsers().map(this.config.sanitizeUser)
                 }
             })
 
@@ -150,10 +190,14 @@ export namespace Auth {
             constructor(
                 protected readonly config: {
                     findUser: (username: string) => { user: T, salt: string } | null,
+                    deleteUser: (user: T) => void,
                     testUser: (user: T, passwordHash: string) => boolean,
                     registerUser: (username: string, passwordHash: string, salt: string) => T,
-                    sterilizeUser: (user: T) => T,
-                    disableRegistration?: boolean
+                    changeUserPassword: (user: T, passwordHashFactory: (salt: string) => string) => void,
+                    sanitizeUser: (user: T) => T,
+                    listUsers: () => T[],
+                    disableRegistration?: boolean,
+                    permissions?: PermissionRepository
                 }
             ) {
                 super()
@@ -168,6 +212,24 @@ export namespace Auth {
                 if (!user) throw new UserInvalidError("Authentication required")
                 return user
             }
+
+            public static PERMISSIONS = {
+                REGISTER: new Permission("auth.register"),
+                CHANGE_OWN_PASSWORD: new Permission("auth.change_own_password"),
+                CHANGE_PASSWORD: new Permission("auth.change_password"),
+                LIST_USERS: new Permission("auth.list_users"),
+                DELETE_OWN_ACCOUNT: new Permission("auth.delete_own_account"),
+                DELETE_ACCOUNT: new Permission("auth.delete_account"),
+            }
+
+            public static DEFAULT_PERMISSIONS: PermissionRepository.PermissionEntry[] = [
+                [AuthController.PERMISSIONS.REGISTER, () => true],
+                [AuthController.PERMISSIONS.CHANGE_OWN_PASSWORD, "login"],
+                [AuthController.PERMISSIONS.CHANGE_PASSWORD, () => false],
+                [AuthController.PERMISSIONS.LIST_USERS, () => false],
+                [AuthController.PERMISSIONS.DELETE_OWN_ACCOUNT, "login"],
+                [AuthController.PERMISSIONS.DELETE_ACCOUNT, () => false],
+            ]
         }
     }
 

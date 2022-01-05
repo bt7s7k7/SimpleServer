@@ -18,16 +18,14 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
 
     public put<K extends keyof T["tables"]>(table: K, data: EntityType<T, K>) {
         this.tables.get(table)!.set(data.id ?? "sigleton", data)
-        this.dirty = true
-        this.options.onChanged?.()
+        this.setDirty()
     }
 
     public delete<K extends keyof T["tables"]>(table: K, id?: string) {
         const deleted = this.tables.get(table)!.delete(id ?? "sigleton")
 
         if (deleted) {
-            this.dirty = true
-            this.options.onChanged?.()
+            this.setDirty()
         }
 
         return deleted
@@ -72,9 +70,14 @@ export class SimpleDB<T extends SimpleDBOptions = SimpleDBOptions> {
         }
     }
 
-    public entityChanged() {
-        this.dirty = true
-        this.options.onChanged?.()
+    public setDirty() {
+        if (!this.dirty) {
+            this.dirty = true
+            queueMicrotask(() => {
+                this.dirty = false
+                this.options.onChanged?.()
+            })
+        }
     }
 
     constructor(

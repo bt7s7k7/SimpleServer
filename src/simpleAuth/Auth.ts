@@ -102,6 +102,19 @@ export namespace Auth {
                 return this.config.registerUser(username, passwordHash, salt)
             }
 
+            public async resolveToken(token: string) {
+                const username = await this.verifyToken(token, "key")
+                if (username) {
+                    const user = this.config.findUser(username)?.user
+                    if (user) return user
+                } else if (this.config.additionalTokenResolver) {
+                    const user = this.config.additionalTokenResolver(token)
+                    if (user) return user
+                }
+
+                return null
+            }
+
             public impl = super.impl({
                 login: async ({ username, password }) => {
                     await delayedPromise(Math.floor(Math.random() * 10))
@@ -176,11 +189,8 @@ export namespace Auth {
                         onIncoming: async (server, session, message, meta) => {
                             const token = message._token
                             if (token) {
-                                const username = await this.controller.verifyToken(token, "key")
-                                if (username) {
-                                    const user = this.controller.config.findUser(username)?.user
-                                    if (user) userMeta.set(meta, user)
-                                }
+                                const user = await this.controller.resolveToken(token)
+                                if (user) userMeta.set(meta, user)
                             }
                         }
                     })
@@ -196,6 +206,7 @@ export namespace Auth {
                     changeUserPassword: (user: T, passwordHashFactory: (salt: string) => string) => void,
                     sanitizeUser: (user: T) => T,
                     listUsers: () => T[],
+                    additionalTokenResolver?: (token: string) => T | null
                     disableRegistration?: boolean,
                     permissions?: PermissionRepository
                 }

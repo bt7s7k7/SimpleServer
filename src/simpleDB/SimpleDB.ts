@@ -8,7 +8,7 @@ interface SimpleDBOptions {
     onChanged?: () => void
 }
 
-interface SimpleDBData {
+export interface SimpleDBData {
     tables: Record<string, Record<string, any>>
 }
 
